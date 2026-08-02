@@ -27,7 +27,7 @@ async def test_注册成功返回密钥并携带extra() -> None:
     )
     result = await handle_register(ctx)
     assert result is not None
-    assert "sk-aaaa" in result
+    assert "`sk\\-aaaa`" in result
     api = ctx.api
     assert isinstance(api, FakeApi)
     assert api.calls[0]["path"] == "/register"
@@ -65,7 +65,7 @@ async def test_密钥更新成功返回新密钥() -> None:
     )
     result = await handle_secret(ctx)
     assert result is not None
-    assert "sk-new" in result
+    assert "`sk\\-new`" in result
 
 
 async def test_信息展示完整账号信息() -> None:
@@ -90,10 +90,10 @@ async def test_信息展示完整账号信息() -> None:
     )
     result = await handle_info(ctx)
     assert result is not None
-    assert "用户 ID: 1" in result
-    assert "sk-info" in result
+    assert "用户 ID: `1`" in result
+    assert "`sk\\-info`" in result
     assert "1234567890123456" in result
-    assert "tg: 123456789" in result
+    assert "tg: `123456789`" in result
 
 
 async def test_同步密钥格式错误() -> None:

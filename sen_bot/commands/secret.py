@@ -8,7 +8,7 @@ from nonebot.matcher import Matcher
 
 from ..backend import err_msg
 from ..models import RegisterDetail
-from .shared import send_reply, escape_md_v2, CommandContext, build_command_context, check_authorized
+from .shared import send_reply, escape_md_v2, md_code, CommandContext, build_command_context, check_authorized
 
 # ── 纯业务处理函数（可独立测试）───────────────────────────────
 
@@ -34,7 +34,7 @@ async def handle_secret(ctx: CommandContext) -> str | None:
     assert response.data is not None
     return (
         "🔄 密钥已重新生成，旧密钥立即失效。\n"
-        f"🔑 新密钥：{escape_md_v2(response.data.secret)}\n\n"
+        f"🔑 新密钥：{md_code(escape_md_v2(response.data.secret))}\n\n"
         "请妥善保管。"
     )
 
