@@ -8,7 +8,7 @@
 
 ```
 nonebot2/
-├── bot.py                  # NoneBot2 应用入口，注册 OneBot V11 与 Telegram 适配器
+├── bot.py                  # NoneBot2 应用入口，注册 OneBot V11 与 Telegram 适配器；含 Telegram API 硬超时补丁
 ├── sen_bot/
 │   ├── __init__.py         # 插件元信息（PluginMetadata），无主动加载逻辑
 │   ├── backend.py          # 后端 API 客户端、错误码映射、日志脱敏
@@ -66,4 +66,11 @@ uv run pyright
 - 敏感配置通过 `.env` 卷挂载注入（`KOISHI_SECRET` 等），`docker-compose.yml` 的 `environment` 只设置容器内必须覆盖的变量（`HOST`、`PORT`、`SEN_API_BASE_URL`）。
 - Telegram 代理通过 `TELEGRAM_PROXY` 环境变量 / `.env` 配置，NoneBot2 Telegram Adapter 原生支持 `proxy` 字段（别名 `telegram_proxy`）。格式如 `socks5://host:port`。
 - 单个 bot 可配置独立 API 服务器：`TELEGRAM_BOTS`（JSON 数组）中每个对象可含 `api_server`。
+
+## Telegram 假死防护（bot.py 硬超时补丁）
+
+- **问题背景**：Telegram 适配器 `poll()` 使用 `getUpdates(timeout=30)` 长轮询，经 HTTP 代理（`TELEGRAM_PROXY`）转发时，代理或 NAT 可能静默丢弃 CONNECT 隧道（无 FIN/RST）。适配器构造请求不带 timeout，NoneBot httpx 驱动回退超时中 `write`/`pool` 为无限，导致该次 await 永久挂起——进程与端口仍存活（healthcheck 仅探测 TCP），但轮询死亡，表现为机器人"假死"且容器不重启。
+- **修复方式**：`bot.py` 的 `patch_telegram_api_timeout()` 在 `register_adapter` 之前包装 `TelegramAdapter._call_api`，用 `asyncio.wait_for(90s)` 限时。超时抛出的 `TimeoutError` 会被轮询循环 `except Exception` 捕获并自动重试，实现自愈。
+- **参数约定**：硬超时常量 `TELEGRAM_API_HARD_TIMEOUT = 90.0`，约为长轮询参数 30 秒的 3 倍；调整 getUpdates 轮询时长时必须同步评估该值。
+- **注意事项**：升级 nonebot-adapter-telegram 后如 `_call_api` 签名变化，需同步调整补丁包装签名；不要在补丁内做重试（外层 poll 循环已负责重试）。
 

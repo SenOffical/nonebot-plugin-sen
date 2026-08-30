@@ -27,10 +27,11 @@ COPY --from=builder /app/bot.py /app/bot.py
 RUN mkdir -p /app/data
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-EXPOSE 8080
+EXPOSE 8003
 
 CMD ["python", "bot.py"]
 
