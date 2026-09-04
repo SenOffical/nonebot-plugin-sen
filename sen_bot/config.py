@@ -18,14 +18,14 @@ class SenSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     api_base_url: str = Field(
-        default="http://localhost:8010/api/v1/koishi",
+        default="http://localhost:8010/api/v1/bot",
         validation_alias=AliasChoices("SEN_API_BASE_URL"),
-        description="后端 Koishi 兼容 API 地址。",
+        description="后端 Bot API 地址。",
     )
     bot_secret: str = Field(
         default="",
-        validation_alias=AliasChoices("KOISHI_SECRET", "SEN_BOT_SECRET"),
-        description="后端 X-Koishi-Secret 鉴权密钥。",
+        validation_alias=AliasChoices("SEN_BOT_SECRET", "KOISHI_SECRET"),
+        description="后端 X-Bot-Secret 鉴权密钥。",
     )
     allowed_groups_json: str = Field(
         default="[]",

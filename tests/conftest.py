@@ -170,8 +170,8 @@ def make_settings(**overrides: Any) -> SenSettings:
     """
 
     values = {
-        "SEN_API_BASE_URL": "http://test/api/v1/koishi",
-        "KOISHI_SECRET": "sk-test",
+        "SEN_API_BASE_URL": "http://test/api/v1/bot",
+        "SEN_BOT_SECRET": "sk-test",
         "SEN_ALLOWED_GROUPS": "[]",
         **overrides,
     }

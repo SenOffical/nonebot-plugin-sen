@@ -65,7 +65,7 @@ def redact_for_log(value: Any) -> Any:
 
 
 class BackendApiClient:
-    """封装 Sen 后端 Koishi 兼容 API。"""
+    """封装 Sen 后端 Bot API。"""
 
     def __init__(
         self,
@@ -106,7 +106,7 @@ class BackendApiClient:
         url = f"{self._settings.api_base_url.rstrip('/')}{path}"
         headers = {
             "Content-Type": "application/json",
-            "X-Koishi-Secret": self._settings.bot_secret,
+            "X-Bot-Secret": self._settings.bot_secret,
         }
         logger.info(f"[->] POST {path} body={redact_for_log(data or {})}")
         try:

@@ -22,8 +22,8 @@ uv run python bot.py
 
 ## 配置
 
-- `SEN_API_BASE_URL`：后端 `/api/v1/koishi` 地址。
-- `KOISHI_SECRET`：后端 `X-Koishi-Secret` 鉴权密钥，沿用后端现有变量名。
+- `SEN_API_BASE_URL`：后端 `/api/v1/bot` 地址。
+- `SEN_BOT_SECRET`：后端 `X-Bot-Secret` 鉴权密钥（兼容旧 `KOISHI_SECRET`）。
 - `SEN_ALLOWED_GROUPS`：允许群 JSON 数组，例如 `[{"id":"-1001","desc":"主群"}]`。
 - `SEN_MEMBERSHIP_CACHE_ENABLED`：是否启用 Redis 正向群成员缓存。
 - `SEN_REDIS_HOST` / `SEN_REDIS_PORT` / `SEN_REDIS_PASSWORD` / `SEN_REDIS_DB`：Redis 连接参数。
@@ -31,5 +31,5 @@ uv run python bot.py
 
 ## Docker
 
-根目录 `docker-compose.yml` 的 `bot` 服务构建本目录。生产环境至少需要配置 `.env` 中的 `KOISHI_SECRET` 和适配器自身需要的 token / 连接参数。
+根目录 `docker-compose.yml` 的 `bot` 服务构建本目录。生产环境至少需要配置 `.env` 中的 `SEN_BOT_SECRET` 和适配器自身需要的 token / 连接参数。
 

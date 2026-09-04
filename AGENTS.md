@@ -2,7 +2,7 @@
 
 ## 职责
 
-`nonebot2/` 是 Sen 机器人端的 NoneBot2/Python 实现，用于替代旧 `koishi-bot/` 的运行时。后端仍沿用 `/api/v1/koishi/*` 兼容 API 和 `X-Koishi-Secret` 鉴权头。
+`nonebot2/` 是 Sen 机器人端的 NoneBot2/Python 实现，用于替代旧 `koishi-bot/` 的运行时。后端 Bot API 为 `/api/v1/bot/*`，鉴权头 `X-Bot-Secret`。
 
 ## 目录结构
 
@@ -63,7 +63,7 @@ uv run pyright
 - **多阶段构建**：builder 阶段用 `COPY --from=ghcr.io/astral-sh/uv:latest` 装 uv + `uv sync --frozen --no-dev` 装依赖；runtime 阶段只拷贝 `.venv`、源码目录和入口脚本。镜像体积小、无构建工具残留。
 - **一致模式**：backend 和 bot 使用完全相同的 Dockerfile 结构（`FROM python:3.12-slim AS builder` → `FROM python:3.12-slim`），仅拷贝的源码路径不同。
 - **运行时不含 uv**：venv 已加入 `PATH`，CMD 直接执行 `python <入口>`，无需 `uv run`。healthcheck 同理。
-- 敏感配置通过 `.env` 卷挂载注入（`KOISHI_SECRET` 等），`docker-compose.yml` 的 `environment` 只设置容器内必须覆盖的变量（`HOST`、`PORT`、`SEN_API_BASE_URL`）。
+- 敏感配置通过 `.env` 卷挂载注入（`SEN_BOT_SECRET` 等），`docker-compose.yml` 的 `environment` 只设置容器内必须覆盖的变量（`HOST`、`PORT`、`SEN_API_BASE_URL`）。
 - Telegram 代理通过 `TELEGRAM_PROXY` 环境变量 / `.env` 配置，NoneBot2 Telegram Adapter 原生支持 `proxy` 字段（别名 `telegram_proxy`）。格式如 `socks5://host:port`。
 - 单个 bot 可配置独立 API 服务器：`TELEGRAM_BOTS`（JSON 数组）中每个对象可含 `api_server`。
 
