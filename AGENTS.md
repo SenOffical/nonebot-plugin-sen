@@ -74,3 +74,18 @@ uv run pyright
 - **参数约定**：硬超时常量 `TELEGRAM_API_HARD_TIMEOUT = 90.0`，约为长轮询参数 30 秒的 3 倍；调整 getUpdates 轮询时长时必须同步评估该值。
 - **注意事项**：升级 nonebot-adapter-telegram 后如 `_call_api` 签名变化，需同步调整补丁包装签名；不要在补丁内做重试（外层 poll 循环已负责重试）。
 
+
+
+---
+
+# Sen NoneBot2 — Claude 协作开发指南
+
+Claude 在 `nonebot2/` 目录工作时应读取并遵守 `AGENTS.md`。本目录当前没有额外 Claude 专用规则；如修改架构、配置、命令、测试或 Docker，需同步更新 `AGENTS.md` 与本文件。
+
+
+---
+
+# Sen NoneBot2 — Claude 协作开发指南
+
+Claude 在 `nonebot2/` 目录工作时应读取并遵守 `AGENTS.md`。本目录当前没有额外 Claude 专用规则；如修改架构、配置、命令、测试或 Docker，需同步更新 `AGENTS.md` 与本文件。
+
