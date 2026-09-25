@@ -12,7 +12,7 @@
 nonebot2/
 ├── bot.py                  # NoneBot2 应用入口，注册 OneBot V11 与 Telegram 适配器；含 Telegram API 硬超时补丁
 ├── sen_bot/
-│   ├── __init__.py         # 插件元信息（PluginMetadata），无主动加载逻辑
+│   ├── __init__.py         # 插件元信息（PluginMetadata），末尾导入 commands 注册命令 matcher
 │   ├── backend.py          # 后端 API 客户端、错误码映射、日志脱敏
 │   ├── config.py           # 环境变量配置、allowedGroups JSON 解析
 │   ├── membership.py       # Redis 正向群成员缓存与平台 Bot API 校验
@@ -31,7 +31,8 @@ nonebot2/
 │       └── merge.py        # /merge 账号合并命令
 ├── tests/                  # pytest 单元测试
 ├── Dockerfile              # Python 3.12 + uv 容器构建
-└── pyproject.toml          # 依赖、pytest、ruff、pyright、[tool.nonebot] 配置
+├── pyproject.toml          # 依赖、pytest、ruff、pyright、[tool.nonebot] 配置
+└── uv.lock                 # uv 依赖锁定文件，Dockerfile 构建时与 pyproject.toml 一起 COPY
 ```
 
 ## 关键设计
@@ -64,14 +65,14 @@ uv run pyright
 
 - **多阶段构建**：builder 阶段用 `COPY --from=ghcr.io/astral-sh/uv:latest` 装 uv + `uv sync --frozen --no-dev` 装依赖；runtime 阶段只拷贝 `.venv`、源码目录和入口脚本。镜像体积小、无构建工具残留。
 - **一致模式**：backend 和 bot 使用完全相同的 Dockerfile 结构（`FROM python:3.12-slim AS builder` → `FROM python:3.12-slim`），仅拷贝的源码路径不同。
-- **运行时不含 uv**：venv 已加入 `PATH`，CMD 直接执行 `python <入口>`，无需 `uv run`。healthcheck 同理。
+- **运行时不含 uv**：venv 已加入 `PATH`，CMD 直接执行 `python <入口>`，无需 `uv run`；镜像与 `docker-compose.yml` 同样未定义 HEALTHCHECK。
 - 敏感配置通过 `.env` 卷挂载注入（`SEN_BOT_SECRET`，兼容旧 `KOISHI_SECRET` 等），`docker-compose.yml` 的 `environment` 只设置容器内必须覆盖的变量（`HOST`、`PORT`、`SEN_API_BASE_URL`）。
 - Telegram 代理通过 `TELEGRAM_PROXY` 环境变量 / `.env` 配置（由 `nonebot-adapter-telegram` 适配器读取，非本仓库代码定义），Adapter 原生支持 `proxy` 字段（别名 `telegram_proxy`）。格式如 `socks5://host:port`。
 - 单个 bot 可配置独立 API 服务器：`TELEGRAM_BOTS`（JSON 数组，由 nonebot-adapter-telegram 适配器读取，非本仓库 config.py 定义）中每个对象可含 `api_server`。
 
 ## Telegram 假死防护（bot.py 硬超时补丁）
 
-- **问题背景**：Telegram 适配器 `poll()` 使用 `getUpdates(timeout=30)` 长轮询，经 HTTP 代理（`TELEGRAM_PROXY`）转发时，代理或 NAT 可能静默丢弃 CONNECT 隧道（无 FIN/RST）。适配器构造请求不带 timeout，NoneBot httpx 驱动回退超时中 `write`/`pool` 为无限，导致该次 await 永久挂起——进程与端口仍存活（healthcheck 仅探测 TCP），但轮询死亡，表现为机器人"假死"且容器不重启。
+- **问题背景**：Telegram 适配器 `poll()` 使用 `getUpdates(timeout=30)` 长轮询，经 HTTP 代理（`TELEGRAM_PROXY`）转发时，代理或 NAT 可能静默丢弃 CONNECT 隧道（无 FIN/RST）。适配器构造请求不带 timeout，NoneBot httpx 驱动回退超时中 `write`/`pool` 为无限，导致该次 await 永久挂起——进程与端口仍存活（当前未配置任何 healthcheck），但轮询死亡，表现为机器人"假死"且容器不重启。
 - **修复方式**：`bot.py` 的 `patch_telegram_api_timeout()` 在 `register_adapter` 之前包装 `TelegramAdapter._call_api`，用 `asyncio.wait_for(90s)` 限时。超时抛出的 `TimeoutError` 会被轮询循环 `except Exception` 捕获并自动重试，实现自愈。
 - **参数约定**：硬超时常量 `TELEGRAM_API_HARD_TIMEOUT = 90.0`，约为长轮询参数 30 秒的 3 倍；调整 getUpdates 轮询时长时必须同步评估该值。
 - **注意事项**：升级 nonebot-adapter-telegram 后如 `_call_api` 签名变化，需同步调整补丁包装签名；不要在补丁内做重试（外层 poll 循环已负责重试）。

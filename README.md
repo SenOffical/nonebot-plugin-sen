@@ -4,6 +4,7 @@
 
 ## 命令
 
+- `/start` / `/help` — 显示帮助与命令列表
 - `/register` — 注册 Sen 账号
 - `/bind <16位支付宝UID>` — 绑定支付宝 UID
 - `/unbind <16位支付宝UID>` — 解绑支付宝 UID
@@ -16,7 +17,6 @@
 
 ```bash
 uv sync
-cp .env.example .env
 uv run python bot.py
 ```
 
@@ -28,6 +28,10 @@ uv run python bot.py
 - `SEN_MEMBERSHIP_CACHE_ENABLED`：是否启用 Redis 正向群成员缓存。
 - `SEN_REDIS_HOST` / `SEN_REDIS_PORT` / `SEN_REDIS_PASSWORD` / `SEN_REDIS_DB`：Redis 连接参数。
 - `SEN_MEMBERSHIP_CACHE_TTL_DAYS`：正向成员缓存 TTL，默认 7 天。
+- `SEN_MEMBERSHIP_CACHE_KEY_PREFIX`：Redis 群成员缓存 key 前缀，默认 `sen:membership`。
+- `SEN_BACKEND_TIMEOUT_SECONDS`：后端 HTTP 请求超时时间，默认 10 秒。
+- `SEN_PLATFORM_API_RETRY_TIMES`：平台 Bot API 临时失败后的重试次数，默认 2 次。
+- `SEN_PLATFORM_API_RETRY_INTERVAL_SECONDS`：平台 Bot API 重试间隔秒数，默认 1.0 秒。
 
 ## Docker
 
