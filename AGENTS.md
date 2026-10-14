@@ -73,6 +73,13 @@ uv run pyright
 - Telegram 代理通过 `TELEGRAM_PROXY` 环境变量 / `.env` 配置（由 `nonebot-adapter-telegram` 适配器读取，非本仓库代码定义），Adapter 原生支持 `proxy` 字段（别名 `telegram_proxy`）。格式如 `socks5://host:port`。
 - 单个 bot 可配置独立 API 服务器：`TELEGRAM_BOTS`（JSON 数组，由 nonebot-adapter-telegram 适配器读取，非本仓库 config.py 定义）中每个对象可含 `api_server`。
 
+## CI/CD（GitHub Actions）
+
+- **工作流文件**：`.github/workflows/docker-publish.yml`，仅在推送 `v*` 格式 tag 时触发（如 `v1.2.3`），构建镜像并推送至私有仓库 `registry.19960222.xyz/sen/nonebot2`。非 tag push（含 main 分支）不会触发。
+- **镜像标签**：由 `docker/metadata-action` 依据 git tag 自动生成 `v1.2.3`、`1.2.3`、`1.2` 与 `latest` 四种标签，指向同一镜像。
+- **凭据**：私有仓库账号密码通过仓库 Secrets `REGISTRY_USERNAME` / `REGISTRY_PASSWORD` 注入，切勿硬编码。首次使用需在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置。
+- **构建缓存**：使用 `type=gha` 的 GitHub Actions 缓存，加速依赖层与 uv sync 的复用；Dockerfile 保持多阶段结构不变。
+
 ## Telegram 假死防护（bot.py 硬超时补丁）
 
 - **问题背景**：Telegram 适配器 `poll()` 使用 `getUpdates(timeout=30)` 长轮询，经 HTTP 代理（`TELEGRAM_PROXY`）转发时，代理或 NAT 可能静默丢弃 CONNECT 隧道（无 FIN/RST）。适配器构造请求不带 timeout，NoneBot httpx 驱动回退超时中 `write`/`pool` 为无限，导致该次 await 永久挂起——进程与端口仍存活（当前未配置任何 healthcheck），但轮询死亡，表现为机器人"假死"且容器不重启。
