@@ -10,7 +10,7 @@
 
 ```
 nonebot2/
-├── bot.py                  # NoneBot2 应用入口，注册 OneBot V11 与 Telegram 适配器；含 Telegram API 硬超时补丁
+├── bot.py                  # NoneBot2 应用入口，注册 OneBot V11 与 Telegram 适配器；含 Telegram API 硬超时补丁与命令菜单自动配置
 ├── sen_bot/
 │   ├── __init__.py         # 插件元信息（PluginMetadata），末尾导入 commands 注册命令 matcher
 │   ├── backend.py          # 后端 API 客户端、错误码映射、日志脱敏
@@ -20,8 +20,9 @@ nonebot2/
 │   ├── platform.py         # NoneBot 事件到 Sen 平台上下文的转换
 │   └── commands/           # 每个用户命令一个文件，各自用 on_command 注册 matcher
 │       ├── __init__.py     # 包初始化，导入所有命令模块以触发 matcher 注册
+│       ├── catalog.py      # 命令目录单一数据源（名称/参数/功能说明/样例），纯数据、无 matcher
 │       ├── shared.py       # 共享上下文、授权守卫、参数校验工具
-│       ├── start.py        # /start 与 /help 帮助引导命令
+│       ├── start.py        # /start 与 /help 帮助引导命令（HELP_TEXT 由 catalog 生成）
 │       ├── register.py     # /register 注册命令
 │       ├── bind.py         # /bind 绑定 UID 命令
 │       ├── unbind.py       # /unbind 解绑 UID 命令
@@ -47,7 +48,9 @@ nonebot2/
 - Telegram 群成员状态只接受 `creator`、`administrator`、`member`，以及 `restricted` 且 `is_member=true`；`left` / `kicked` 必须拒绝。
 - API 日志必须通过 `redact_for_log()` 脱敏，不能记录 secret/password/token 明文。
 - 每个生产函数和方法都保留中文 docstring，新增函数时同步补齐参数说明，避免 IDE 与 lint 体验退化。
+- **命令目录单一数据源**: `commands/catalog.py` 以纯数据 `CommandSpec`（`name`/`args`/`summary`/`example`）定义全部用户命令；`start.py` 的 `HELP_TEXT` 与 `bot.py` 的 Telegram 命令菜单均由它生成，避免命令文案多处重复。新增/修改命令时需同步更新该目录。
 - `pyproject.toml` 的 `[tool.nonebot]` 区段声明了适配器和插件目录。
+- **Telegram 命令菜单**: `bot.py` 通过 `on_bot_connect` 钩子在 Telegram Bot 连接成功后调用 `setMyCommands` 自动写入命令菜单，菜单条目由 `build_telegram_command_menu()` 从 `commands/catalog.py` 单一数据源生成，与 `/start` 帮助文本天然一致。
 
 ## 验证
 
@@ -76,3 +79,12 @@ uv run pyright
 - **修复方式**：`bot.py` 的 `patch_telegram_api_timeout()` 在 `register_adapter` 之前包装 `TelegramAdapter._call_api`，用 `asyncio.wait_for(90s)` 限时。超时抛出的 `TimeoutError` 会被轮询循环 `except Exception` 捕获并自动重试，实现自愈。
 - **参数约定**：硬超时常量 `TELEGRAM_API_HARD_TIMEOUT = 90.0`，约为长轮询参数 30 秒的 3 倍；调整 getUpdates 轮询时长时必须同步评估该值。
 - **注意事项**：升级 nonebot-adapter-telegram 后如 `_call_api` 签名变化，需同步调整补丁包装签名；不要在补丁内做重试（外层 poll 循环已负责重试）。
+
+## Telegram 命令菜单（bot.py 自动配置）
+
+- **目的**：Telegram 客户端默认不展示 Bot 命令菜单，需主动调用 Bot API `setMyCommands` 写入，用户才能通过菜单按钮查看并触发命令。
+- **实现方式**：`bot.py` 的 `setup_telegram_command_menu(driver)` 在 `main()` 中通过 `driver.on_bot_connect` 注册钩子；钩子在每个 Bot 连接成功后触发，用 `isinstance` 判定仅对 Telegram `Bot` 生效（OneBot 等其他适配器跳过），随后调用 `bot.set_my_commands(...)`。
+- **命令来源**：命令与描述来自单一数据源 `sen_bot/commands/catalog.py`（`HELP_COMMAND` 与 `COMMAND_CATALOG`），`bot.py` 的 `build_telegram_command_menu()` 延迟导入并组装（帮助命令置顶）。`command` 不含前导斜杠且须满足 Telegram 约束（1-32 字符，仅小写字母/数字/下划线），`description`（即 `summary`）为 1-256 字符纯文本。新增或删除用户命令时，只需改 `catalog.py`，`HELP_TEXT` 与菜单会自动同步，并需同步补充 `tests/test_bot_menu.py`。
+- **延迟导入原因**：`sen_bot` 包导入会执行各命令模块顶层的 `on_command()`，而 `on_command` 依赖 `get_driver()`，必须在 `nonebot.init()` 之后。因此 `bot.py` 不在模块顶层导入 `sen_bot.*`，而是在运行时钩子内延迟导入 `catalog`。
+- **容错**：`set_my_commands` 失败仅记录 `logger.warning`，不中断启动与轮询。
+- **测试**：`tests/test_bot_menu.py` 校验命令名合法性、描述长度、命令名唯一性、菜单与 `catalog` 一致性及 `HELP_TEXT` 渲染覆盖，无需真实 Telegram 连接。

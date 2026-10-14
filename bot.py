@@ -5,10 +5,30 @@ from __future__ import annotations
 import asyncio
 
 import nonebot
+from nonebot import logger
+from nonebot.drivers import Driver
 
 # Telegram API 调用硬超时（秒）。getUpdates 长轮询参数为 30 秒，
 # 预留 3 倍余量以覆盖代理转发的额外延迟，避免误伤正常请求。
 TELEGRAM_API_HARD_TIMEOUT = 90.0
+
+
+def build_telegram_command_menu() -> list[tuple[str, str]]:
+    """构建 Telegram 命令菜单条目。
+
+    命令数据来自插件的命令目录单一数据源（`sen_bot.commands.catalog`），
+    与 `/start` 帮助文本共享，帮助命令置顶。command 不含前导斜杠，
+    仅允许小写字母、数字与下划线（1-32 字符）；description 为纯文本（1-256 字符）。
+
+    采用延迟导入：`sen_bot` 包导入会触发命令 matcher 注册，必须在
+    ``nonebot.init()`` 之后执行；本函数仅在 Bot 连接钩子（运行时）中调用。
+
+    :returns: ``(命令名, 描述)`` 列表。
+    """
+
+    from sen_bot.commands.catalog import COMMAND_CATALOG, HELP_COMMAND
+
+    return [(spec.name, spec.summary) for spec in (HELP_COMMAND, *COMMAND_CATALOG)]
 
 
 def patch_telegram_api_timeout() -> None:
@@ -27,12 +47,13 @@ def patch_telegram_api_timeout() -> None:
     """
 
     from nonebot.adapters.telegram import Adapter as TelegramAdapter
+    from nonebot.adapters.telegram import Bot as TelegramBot
 
     original_call_api = TelegramAdapter._call_api
 
     async def call_api_with_timeout(
         self: TelegramAdapter,
-        bot: object,
+        bot: TelegramBot,
         api: str,
         **data: object,
     ) -> object:
@@ -54,6 +75,44 @@ def patch_telegram_api_timeout() -> None:
     TelegramAdapter._call_api = call_api_with_timeout  # type: ignore[method-assign]
 
 
+def setup_telegram_command_menu(driver: Driver) -> None:
+    """注册 bot 连接钩子，为 Telegram Bot 自动配置命令菜单。
+
+    在 Bot 连接成功后调用 Telegram ``setMyCommands`` 写入命令菜单，
+    使用户可通过客户端菜单按钮查看并触发可用命令。仅对 Telegram
+    适配器生效，OneBot 等其他适配器的 Bot 会被跳过。
+
+    :param driver: NoneBot2 驱动实例，用于注册 ``on_bot_connect`` 钩子。
+    """
+
+    from nonebot.adapters import Bot
+    from nonebot.adapters.telegram import Bot as TelegramBot
+    from nonebot.adapters.telegram.model import BotCommand
+
+    @driver.on_bot_connect
+    async def _apply_command_menu(bot: Bot) -> None:
+        """为已连接的 Telegram Bot 写入命令菜单。
+
+        :param bot: 当前连接成功的 Bot 实例。
+        """
+
+        if not isinstance(bot, TelegramBot):
+            return
+        commands = [
+            BotCommand(command=name, description=desc)
+            for name, desc in build_telegram_command_menu()
+        ]
+        try:
+            await bot.set_my_commands(commands)
+        except Exception as exc:
+            # 菜单配置失败不应中断启动或轮询，仅记录告警。
+            logger.warning(f"配置 Telegram Bot {bot.self_id} 命令菜单失败: {exc}")
+            return
+        logger.info(
+            f"已为 Telegram Bot {bot.self_id} 配置命令菜单（{len(commands)} 项）"
+        )
+
+
 def main() -> None:
     """初始化 NoneBot2 驱动并加载 Sen 插件。"""
 
@@ -65,6 +124,7 @@ def main() -> None:
     from nonebot.adapters.telegram import Adapter as TelegramAdapter
 
     patch_telegram_api_timeout()
+    setup_telegram_command_menu(driver)
 
     driver.register_adapter(OneBotV11Adapter)
     driver.register_adapter(TelegramAdapter)
