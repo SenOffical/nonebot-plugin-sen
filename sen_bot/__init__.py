@@ -18,4 +18,5 @@ __plugin_meta__ = PluginMetadata(
 )
 
 
-from . import commands  # noqa: E402,F401 — 导入命令模块以注册 on_command matcher
+# 导入 commands 注册 on_command matcher；导入 membership_watch 注册群成员变动 matcher。
+from . import commands, membership_watch  # noqa: E402,F401

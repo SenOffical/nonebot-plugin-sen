@@ -32,6 +32,7 @@ uv run python bot.py
 - `SEN_BACKEND_TIMEOUT_SECONDS`：后端 HTTP 请求超时时间，默认 10 秒。
 - `SEN_PLATFORM_API_RETRY_TIMES`：平台 Bot API 临时失败后的重试次数，默认 2 次。
 - `SEN_PLATFORM_API_RETRY_INTERVAL_SECONDS`：平台 Bot API 重试间隔秒数，默认 1.0 秒。
+- 群成员变动事件上报**无需额外配置**：bot 收到 Telegram 退群/被踢事件后，直接 POST 到 `SEN_API_BASE_URL` 的 `/membership-events`，复用 `X-Bot-Secret` 鉴权。
 
 ## Docker
 

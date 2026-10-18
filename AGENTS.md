@@ -16,6 +16,7 @@ nonebot2/
 │   ├── backend.py          # 后端 API 客户端、错误码映射、日志脱敏
 │   ├── config.py           # 环境变量配置、allowedGroups JSON 解析
 │   ├── membership.py       # Redis 正向群成员缓存与平台 Bot API 校验
+│   ├── membership_watch.py # Telegram 群成员变动事件处理与后端上报
 │   ├── models.py           # Pydantic 数据模型，兼容 camelCase/snake_case
 │   ├── platform.py         # NoneBot 事件到 Sen 平台上下文的转换
 │   └── commands/           # 每个用户命令一个文件，各自用 on_command 注册 matcher
@@ -51,6 +52,15 @@ nonebot2/
 - **命令目录单一数据源**: `commands/catalog.py` 以纯数据 `CommandSpec`（`name`/`args`/`summary`/`example`）定义全部用户命令；`start.py` 的 `HELP_TEXT` 与 `bot.py` 的 Telegram 命令菜单均由它生成，避免命令文案多处重复。新增/修改命令时需同步更新该目录。
 - `pyproject.toml` 的 `[tool.nonebot]` 区段声明了适配器和插件目录。
 - **Telegram 命令菜单**: `bot.py` 通过 `on_bot_connect` 钩子在 Telegram Bot 连接成功后调用 `setMyCommands` 自动写入命令菜单，菜单条目由 `build_telegram_command_menu()` 从 `commands/catalog.py` 单一数据源生成，与 `/start` 帮助文本天然一致。
+- **群成员变动事件**: Telegram 的 `allowed_updates` 默认**不含** `chat_member`，因此 `bot.py` 的 `patch_telegram_allowed_updates()` 包装 `TelegramAdapter._call_api`，为 `get_updates` 补充白名单；`membership_watch.py` 再用 `on_notice` 接住 `ChatMemberUpdatedEvent`，把 `left` / `kicked` 整理成载荷 POST 给 `<SEN_API_BASE_URL>/membership-events`。前提是 bot 必须是群管理员。
+
+## 群成员变动事件
+
+- **订阅前提**: 两件事缺一不可——bot 是群管理员（Telegram 侧限制）、`getUpdates` 的 `allowed_updates` 显式包含 `chat_member`（适配器默认不传）。后者由 `patch_telegram_allowed_updates()` 在 `register_adapter` 之前打补丁完成。
+- **取用户 ID**: 必须用 `event.new_chat_member.user.id`。`event.from_` 是「触发变化的人」，被移出时它是操作的管理员而非被移出者，误用会封错账号。
+- **过滤条件**: 只处理 `left` / `kicked`，且群 ID 必须在 `SEN_ALLOWED_GROUPS` 中；入群、提权等其他状态一律忽略。
+- **上报**: 事件通道与 `/api/v1/bot/*` 同向（bot → 后端），因此复用 `SEN_API_BASE_URL` 与 `SEN_BOT_SECRET`，不引入任何额外配置。收到 `left` / `kicked` 后无条件 POST 到 `<SEN_API_BASE_URL>/membership-events`，由后端决定封禁或删除；上报失败只告警，不影响命令功能。
+- **不能替代定时校验**: `getUpdates` 只保留 24 小时，bot 停机超过一天事件永久丢失，因此事件是加速通道，仍需定时脚本兜底。
 
 ## 验证
 

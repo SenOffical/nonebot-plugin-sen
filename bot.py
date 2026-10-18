@@ -12,6 +12,26 @@ from nonebot.drivers import Driver
 # 预留 3 倍余量以覆盖代理转发的额外延迟，避免误伤正常请求。
 TELEGRAM_API_HARD_TIMEOUT = 90.0
 
+# Telegram getUpdates 的 allowed_updates 白名单。
+# 默认值刻意排除了 chat_member 等类型，因此必须显式列出，
+# 否则 bot 虽然在群里是管理员，也收不到任何成员的入群/退群通知。
+TELEGRAM_ALLOWED_UPDATES: list[str] = [
+    "message",
+    "edited_message",
+    "channel_post",
+    "edited_channel_post",
+    "inline_query",
+    "chosen_inline_result",
+    "callback_query",
+    "shipping_query",
+    "pre_checkout_query",
+    "poll",
+    "poll_answer",
+    "my_chat_member",
+    "chat_member",
+    "chat_join_request",
+]
+
 
 def build_telegram_command_menu() -> list[tuple[str, str]]:
     """构建 Telegram 命令菜单条目。
@@ -75,6 +95,48 @@ def patch_telegram_api_timeout() -> None:
     TelegramAdapter._call_api = call_api_with_timeout  # type: ignore[method-assign]
 
 
+def patch_telegram_allowed_updates() -> None:
+    """为 Telegram ``getUpdates`` 显式追加 ``allowed_updates``。
+
+    背景：Telegram 的 ``allowed_updates`` 默认值刻意排除了 ``chat_member``，
+    而适配器的 ``poll()`` 调用 ``get_updates`` 时没有传该参数。结果是即使 bot
+    是群管理员，也收不到任何成员变动通知（退群、被踢、重新入群）。
+
+    实现方式：包装 :meth:`TelegramAdapter._call_api`，在 ``api`` 为
+    ``get_updates`` 时补充白名单；其余 API 原样透传。
+
+    必须在 ``register_adapter`` 之前调用。应与
+    :func:`patch_telegram_api_timeout` 同时启用，两者包装顺序不影响功能
+    （超时作用于整次调用，白名单只改参数）。
+    """
+
+    from nonebot.adapters.telegram import Adapter as TelegramAdapter
+    from nonebot.adapters.telegram import Bot as TelegramBot
+
+    original_call_api = TelegramAdapter._call_api
+
+    async def call_api_with_allowed_updates(
+        self: TelegramAdapter,
+        bot: TelegramBot,
+        api: str,
+        **data: object,
+    ) -> object:
+        """带 allowed_updates 的 API 调用包装。
+
+        :param self: Telegram 适配器实例。
+        :param bot: 发起调用的 Bot 实例。
+        :param api: Telegram Bot API 方法名（适配器内部使用 snake_case）。
+        :param data: API 参数。
+        :returns: 原 ``_call_api`` 的返回值。
+        """
+
+        if api == "get_updates":
+            data.setdefault("allowed_updates", TELEGRAM_ALLOWED_UPDATES)
+        return await original_call_api(self, bot, api, **data)
+
+    TelegramAdapter._call_api = call_api_with_allowed_updates  # type: ignore[method-assign]
+
+
 def setup_telegram_command_menu(driver: Driver) -> None:
     """注册 bot 连接钩子，为 Telegram Bot 自动配置命令菜单。
 
@@ -124,6 +186,7 @@ def main() -> None:
     from nonebot.adapters.telegram import Adapter as TelegramAdapter
 
     patch_telegram_api_timeout()
+    patch_telegram_allowed_updates()
     setup_telegram_command_menu(driver)
 
     driver.register_adapter(OneBotV11Adapter)
